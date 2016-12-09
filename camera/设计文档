@@ -1,0 +1,23 @@
+------------视频采集模块---------------
+实现框架：
+	1.本模块作为服务器的fork出的一个进程
+	2.服务器调用函数fork时传递参数：设备名，保存文件路径名
+	3.进程进行死循环采集图片信息，收到服务器信号号后改变循环条件
+	4.进程死循环采集的执行有时钟信号来控制采集频率
+int start(char* devname,char * filename);//服务器开启camera调用函数；
+	void start_camera(void *path);线程执行函数
+		int init_device(char *);初始化camera设备
+			void open_device (char *devname,int *fd);//打开设备文件
+			void query_cap(int fd);//检查设备能力：查看是否具有V4L2_BUF_TYPE_VIDEO_CAPTURE能力和支持读写能力
+			void set_size(int fd);//设置图片大小 
+		void request_queue(int fd );//申请内存缓冲区             
+		void init_buf(struct BUFFER * buf);//初始化缓存映射保存区
+		void init_mmap(int fd ,struct BUFFER *buf);//缓冲队列映射
+
+int stop(void);//服务器关闭camera调用函数
+
+
+
+遇到的问题：
+	1.打开设备文件时没有设置写的属性，读不出图片数据
+	2.采集频率不设置不恰当时无法连续采集图片，（当采集缓冲队列的使用完时，程序会自动结束而不会报异常）；
