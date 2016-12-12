@@ -117,7 +117,8 @@ void set_size(void )
 	format.fmt.pix.width=IMAGE_WIDTH;
 	format.fmt.pix.height=IMAGE_HEIGHT;
 	format.fmt.pix.pixelformat=V4L2_PIX_FMT_YUYV;
-	format.fmt.pix.field=V4L2_FIELD_INTERLACED;
+//	format.fmt.pix.field=V4L2_FIELD_INTERLACED;
+	format.fmt.pix.field=V4L2_FIELD_NONE;
 	ckioctl(fd,VIDIOC_S_FMT,&format);
 }
 //申请内存缓冲区
@@ -217,7 +218,8 @@ void collect_data(void)
 	picture_count++;
 	//保存数据
 
-	int fs = open(filepath,O_RDWR | O_CREAT,0666);
+//	int fs = open(filepath,O_RDWR | O_CREAT,0666);
+	int fs = open("hy",O_RDWR | O_CREAT,0666);
 	if(fs< 0)
 	{
 		log_exit("open Storage file");
@@ -305,10 +307,10 @@ void add_bmphead(int fs)
 	fileinfo.biBitCount = 24;//每个像素24bit
 	fileinfo.biCompression = 0;//不压缩
 	fileinfo.biSizeImage = IMAGE_WIDTH * IMAGE_HEIGHT *3;//像素字节数
-	fileinfo.biXPelsPerMeter = 5000;//2835;//像素每米
+	fileinfo.biXPelsPerMeter = 0;//2835;//像素每米
 //	fileinfo.biXPelsPerMeter = 2835;//2835;//像素每米
 //	fileinfo.biYPelsPerMeter = 2835;//2835;
-	fileinfo.biYPelsPerMeter = 5000;//2835;
+	fileinfo.biYPelsPerMeter = 0;//2835;
 	fileinfo.biClrUsed = 0;//已用过的颜色，24的为0；
 	fileinfo.biClrImportant = 0;//每个像素都重要
 	//文件第三部分 色彩表 24bit不需要
@@ -352,9 +354,9 @@ void input_rgb(unsigned char y,unsigned char u,unsigned char v)
 {
 	int r,b,g;
 	char outbuf[3]="";
-	r = y + (1.370705 * (v-128));
-	g = y - (0.698001 * (v-128)) - (0.337633 * (u-128));
-	b = y + (1.732446 * (u-128));
+	b = y + (1.772 * (u-128));
+	g = y - (0.71414 * (v-128)) - (0.34413 * (u-128));
+	r = y + (1.402 * (v-128));
 	if(r > 255) 
 	{
 		r = 255;
@@ -379,11 +381,12 @@ void input_rgb(unsigned char y,unsigned char u,unsigned char v)
 	{
 		b = 0;
 	}
-	outbuf[0] = r;
+	outbuf[0] = b;
 	outbuf[1] = g;
-	outbuf[2] = b;
+	outbuf[2] = r;
 	unsigned int position =0;
-	position = (IMAGE_HEIGHT - gbpos/(IMAGE_WIDTH*3))*IMAGE_WIDTH*3 + gbpos%(IMAGE_WIDTH*3);
+	position = (IMAGE_HEIGHT - gbpos/(IMAGE_WIDTH*3))*IMAGE_WIDTH*3 - gbpos%(IMAGE_WIDTH*3);
+//	position = (IMAGE_WIDTH - gbpos/(IMAGE_HEIGHT*3))*IMAGE_HEIGHT*3 - gbpos%(IMAGE_HEIGHT*3);
 	bcopy(outbuf,bufdata+position,3);
 	gbpos +=3;
 }
