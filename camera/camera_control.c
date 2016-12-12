@@ -33,10 +33,11 @@ int start(char *devname,char *filename)
 }
 int stop(void)
 {
-	printf("pthread=%lu\n",camera_pthread);
-	if(pthread_kill(camera_pthread,SIGUSR1))
-	{
-		return -1;
-	}
+	printf("关闭线程pthread=%lu\n",camera_pthread);
+//	if(pthread_kill(camera_pthread,SIGCHLD))
+//	{
+//		return -1;
+//	}
+	condition = 0;
 	return 0;
 }

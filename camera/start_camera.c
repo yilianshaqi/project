@@ -30,10 +30,10 @@ void *start_camera(void *argv)
 	fd = 0;
 //	struct BUFFER *buf=NULL;
 	picture_count =0;
-	buf_count = 10;
+	buf_count = 1;
 	condition = 1;
 	//停止信号处理监听
-	signal(SIGUSR1,stop_handler);
+	signal(SIGCHLD,stop_handler);
 //	sleep(6);
 	//初始化函数
 	init_device(devname);
@@ -50,7 +50,12 @@ void *start_camera(void *argv)
 	start_capture();
 	//定时信号处理
 	signal(SIGALRM,loop_handler);
+//	alarm(1);
 	ualarm(1,RATE);
+//	while(1)
+//	{
+//		collect_data();
+//	}
 	while(1)
 	{
 		sleep(100);
@@ -78,6 +83,7 @@ int init_device(char *devname)
 {
 	//打开设备
 	open_device(devname);
+	printf("fd = %d\n",fd);
 	//检查设备能力
 	query_cap();
 	//设置图片大小
@@ -186,6 +192,7 @@ void add_queue(void)
 		ckioctl(fd,VIDIOC_QBUF,&addbuf);
 	}
 }
+
 void start_capture(void)
 {
 	enum v4l2_buf_type type;
@@ -199,18 +206,29 @@ void collect_data(void)
 	fd_set set;
 	FD_ZERO(&set);
 	FD_SET(fd,&set);
+	struct timeval tv;
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
 	int ret = select(fd+1,&set,NULL,NULL,NULL);
 	printf("file:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
 	if(ret <= 0)
 	{
+		printf("select ret =%d,errno:%d\n",ret,errno);
 		log_exit("select");
 	}
 	//获取采集满的缓冲区
 	bzero(&getdata,sizeof(getdata));
 	getdata.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	getdata.memory = V4L2_MEMORY_MMAP;
-	ckioctl(fd,VIDIOC_DQBUF,&getdata);
-
+	printf("line:%d, fd = %d\n",__LINE__,fd);
+//	ckioctl(fd,VIDIOC_DQBUF,&getdata);	
+	ret = ioctl(fd,VIDIOC_DQBUF,&getdata);
+	if(ret <0)
+	{
+		printf("DQBUF:ret =%d,%s\n",ret,strerror(errno));
+	//	pthread_exit(NULL);
+	}
+	printf("VIDIOC_DQBUF:%X\n",VIDIOC_DQBUF);
 	//保存文件名设置
 	char filepath[256]="";
 	sprintf(filepath,"%s%d.bmp",filename,picture_count%20);
@@ -218,8 +236,8 @@ void collect_data(void)
 	picture_count++;
 	//保存数据
 
-//	int fs = open(filepath,O_RDWR | O_CREAT,0666);
-	int fs = open("hy",O_RDWR | O_CREAT,0666);
+	int fs = open(filepath,O_RDWR | O_CREAT,0666);
+//	int fs = open("hy",O_RDWR | O_CREAT,0666);
 	if(fs< 0)
 	{
 		log_exit("open Storage file");
@@ -244,12 +262,14 @@ void collect_data(void)
 	addbuf.memory = V4L2_MEMORY_MMAP;
 	addbuf.index = getdata.index;
 	ckioctl(fd,VIDIOC_QBUF,&addbuf);
+	printf("VIDICO_QBUF:%x\n",VIDIOC_QBUF);
 }
 //停止视频数据采集
 void stop_capture(void)
 {
 	enum v4l2_buf_type type;
 	type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	printf("line:%d, fd = %d\n",__LINE__,fd);
 	ckioctl(fd,VIDIOC_STREAMOFF,&type);
 }
 //关闭视频设备
@@ -269,10 +289,12 @@ void loop_handler(int signum)
 		//获得图片
 		collect_data();
 		//设置定时器
+	//	alarm(1);
 	}	
 	else
 	{
 		ualarm(1,0);
+		printf("VIDIOC_STREAMOFF:%x\n",VIDIOC_STREAMOFF);
 		stop_capture();
 		close_device();
 		printf("camera pthread over\n");
@@ -293,13 +315,10 @@ void add_bmphead(int fs)
 	bzero(&filehead,sizeof(filehead));
 	filehead.bfType = (unsigned short)0x4d42;//bm
 	filehead.bfSize = (unsigned long)(IMAGE_WIDTH * IMAGE_HEIGHT* 3 + 14 + 40); //文件字节数
-//	filehead.bfSize = IMAGE_WIDTH * IMAGE_HEIGHT* 3 + sizeof(BMPFILEHEAD) + sizeof(BMPINFOHEAD); //文件字节数
 	filehead.bfoffbits = 14+40;//bmp文件头的偏移量
-//	filehead.bfoffbits = sizeof(BMPFILEHEAD)+sizeof(BMPINFOHEAD);//bmp文件头的偏移量
 	//位图第二部分 数据属性
 	BMPINFOHEAD fileinfo;
 	bzero(&fileinfo,sizeof(fileinfo));
-//	fileinfo.biSize = sizeof(BMPINFOHEAD);
 	fileinfo.biSize = 40;
 	fileinfo.biWidth = IMAGE_WIDTH;
 	fileinfo.biHeight = IMAGE_HEIGHT;
@@ -385,7 +404,7 @@ void input_rgb(unsigned char y,unsigned char u,unsigned char v)
 	outbuf[1] = g;
 	outbuf[2] = r;
 	unsigned int position =0;
-	position = (IMAGE_HEIGHT - gbpos/(IMAGE_WIDTH*3))*IMAGE_WIDTH*3 - gbpos%(IMAGE_WIDTH*3);
+	position = (IMAGE_HEIGHT - gbpos/(IMAGE_WIDTH*3))*IMAGE_WIDTH*3 + gbpos%(IMAGE_WIDTH*3);
 //	position = (IMAGE_WIDTH - gbpos/(IMAGE_HEIGHT*3))*IMAGE_HEIGHT*3 - gbpos%(IMAGE_HEIGHT*3);
 	bcopy(outbuf,bufdata+position,3);
 	gbpos +=3;

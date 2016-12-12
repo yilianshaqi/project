@@ -21,11 +21,11 @@
 #include<errno.h>
 #include <unistd.h>
 #include<sys/mman.h>
-int  BUF_SIZE= 5;
+int  BUF_SIZE= 10;
 int img_width = 640;
 int img_height = 480;
 int main(){
-	int fd = open("/dev/video1",O_RDWR);
+	int fd = open("/dev/video2",O_RDWR);
 	if(fd < 0)
 	{
 		printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
@@ -82,8 +82,8 @@ int main(){
 		printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
 		return -1;
 	}
-
-*/  // 剪裁不支持
+*/
+  // 剪裁不支持
 
 
 
@@ -111,10 +111,33 @@ int main(){
 		return -1;
 	}
 	printf("width:%d,height:%d\n",format.fmt.pix.width,format.fmt.pix.height);
-	printf("format.fmt.pix.pixelformat :%X,%X\n",format.fmt.pix.pixelformat,format.fmt.pix.pixelformat & V4L2_PIX_FMT_YUYV);
+	printf("spaceperlien:%d,field:%d\n",format.fmt.pix.bytesperline,format.fmt.pix.field & V4L2_FIELD_TOP);
+	printf("format.fmt.pix.pixelformat :%X,%X\n",format.fmt.pix.pixelformat,format.fmt.pix.pixelformat & getformat.pixelformat);
 
-	
+	//设置帧率
+	struct v4l2_streamparm sparm;
+	bzero(&sparm,sizeof(sparm));
+	sparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if(ioctl(fd,VIDIOC_G_PARM,&sparm))
+	{
+		printf("查看帧率参数失败:%s\n",strerror(errno));
+	}
+	printf("capability :%d,numerator:%d,denominator:%d\n",sparm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME,sparm.parm.capture.timeperframe.numerator,sparm.parm.capture.timeperframe.denominator);
+
+	bzero(&sparm,sizeof(sparm));
+	sparm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	sparm.parm.capture.capability=V4L2_CAP_TIMEPERFRAME;
+	sparm.parm.capture.timeperframe.numerator = 1;
+	sparm.parm.capture.timeperframe.denominator = 10;
+	if(ioctl(fd,VIDIOC_S_PARM,&sparm))
+	{
+		printf("set parm error\n");
+	}
+	printf("capability :%d,numerator:%d,denominator:%d\n",sparm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME,sparm.parm.capture.timeperframe.numerator,sparm.parm.capture.timeperframe.denominator);
+
+
 	//申请内存缓冲区
+
 	struct v4l2_requestbuffers  buffers;
 	bzero(&buffers,sizeof(buffers));
 	buffers.count = BUF_SIZE;
@@ -193,62 +216,72 @@ int main(){
 	}
 	//select 读取采集的视频数据
 	struct v4l2_buffer getdata;
-	bzero(&getdata,sizeof(getdata));
-	fd_set set;
-	FD_ZERO(&set);
-	FD_SET(fd,&set);
-	int ret = select(fd+1,&set,NULL,NULL,NULL);
-	if(ret > 0)
+	int num = 100;
+	while(num--)
 	{
-		//获取采集满的缓冲区
-		bzero(&getdata,sizeof(getdata));
-		getdata.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		getdata.memory = V4L2_MEMORY_MMAP;
-		if(ioctl(fd,VIDIOC_DQBUF,&getdata))
-		{
-			printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
-			return -1;
-		}
-		int fs = open("picture",O_RDWR | O_CREAT);
-		if(fs<0)
-		{
-			printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
-			return -1;
-		}
-		int rest = write(fs,buf[getdata.index].start,buf[getdata.index].length);
-		if(rest <0)
-		{
-			printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
-			return -1;
-		}
-		close(fs);  
-		printf("index:%d\n",getdata.index);
-/*		FILE *fs = fopen("picture","a+");
-		if(fs==NULL)
-		{
-			printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
-			return -1;
-		}
-		int rest = fwrite(buf[getdata.index].start,buf[getdata.index].length,1,fs);
-		if(rest<=0)
-		{
-			printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
-			return -1;
-			
-		}
-		fclose(fs);   */
-		//将缓冲区才添加回等待队列
-		
-		bzero(&addbuf,sizeof(addbuf));
-		addbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		addbuf.memory = V4L2_MEMORY_MMAP;
-		addbuf.index = getdata.index;
-		if(ioctl(fd,VIDIOC_QBUF,&addbuf))
-		{
-			printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
-			return -1;
-		}
 
+
+		bzero(&getdata,sizeof(getdata));
+		fd_set set;
+		FD_ZERO(&set);
+		FD_SET(fd,&set);
+		struct timeval tv;
+		tv.tv_sec = 5;
+		tv.tv_usec = 0;
+		printf("before select\n");
+		int ret = select(fd+1,&set,NULL,NULL,&tv);
+		printf("after select\n");
+		if(ret > 0)
+		{
+			//获取采集满的缓冲区
+			bzero(&getdata,sizeof(getdata));
+			getdata.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+			getdata.memory = V4L2_MEMORY_MMAP;
+			if(ioctl(fd,VIDIOC_DQBUF,&getdata))
+			{
+				printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
+				return -1;
+			}
+			int fs = open("picture",O_RDWR | O_CREAT,0666);
+			if(fs<0)
+			{
+				printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
+				return -1;
+			}
+			int rest = write(fs,buf[getdata.index].start,buf[getdata.index].length);
+			if(rest <0)
+			{
+				printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
+				return -1;
+			}
+			close(fs);  
+			printf("index:%d\n",getdata.index);
+			/*		FILE *fs = fopen("picture","a+");
+					if(fs==NULL)
+					{
+					printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
+					return -1;
+					}
+					int rest = fwrite(buf[getdata.index].start,buf[getdata.index].length,1,fs);
+					if(rest<=0)
+					{
+					printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
+					return -1;
+
+					}
+					fclose(fs);   */
+			//将缓冲区才添加回等待队列
+
+			bzero(&addbuf,sizeof(addbuf));
+			addbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+			addbuf.memory = V4L2_MEMORY_MMAP;
+			addbuf.index = getdata.index;
+			if(ioctl(fd,VIDIOC_QBUF,&addbuf))
+			{
+				printf("filename:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
+				return -1;
+			}
+		}
 	}
 	//关闭视频采集数据流	
 	

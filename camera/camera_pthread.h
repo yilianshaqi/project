@@ -73,7 +73,7 @@ int fd;
 int picture_count ;
 FILE *camera_log_error;
 int buf_count ;
-int condition;
+//int condition;
 struct BUFFER *buf;
 char *filename ;
 //unsigned int datafirst;
@@ -81,7 +81,7 @@ unsigned int gbpos;
 char *bufdata;
 unsigned int bufdata_length;
 
-#define RATE 50000
+#define RATE 500000
 #define IMAGE_WIDTH  640
 #define IMAGE_HEIGHT 480
 

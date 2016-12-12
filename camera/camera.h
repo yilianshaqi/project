@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include<stdio.h>
 #include<string.h>
+#include <unistd.h>
 #include"camera_pthread.h"
 enum ERRO_CODE
 {
@@ -19,5 +20,5 @@ enum ERRO_CODE
 int start(char *,char *);
 void *start_camera(void *);
 int stop(void);
-
+int condition;
 #endif 

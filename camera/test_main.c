@@ -10,9 +10,17 @@
 #include"camera.h"
 int main()
 {
-	start("/dev/video3","/home/hy/project/picture/pict");
+	start("/dev/video5","/home/hy/project/picture/pict");
 //	START("/home/hy");
-	sleep(6);
+
+	printf("睡   完，stop调用\n");
+	sleep(3);
+	int i,j;
+	for( i =0;i<10000000;i++);
+//	{
+	//	for(j=0;j<10000000;i++);
+	
+//	}
 	stop();
 	sleep(2);
 	return 0;
