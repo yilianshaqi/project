@@ -1,4 +1,4 @@
-/*************************************************************************
+/************************************************************************
     > File Name: test_main.c
     > Author: huang yang
     > Mail: huangyangwork@sina.com 
@@ -10,11 +10,11 @@
 #include"camera.h"
 int main()
 {
-	start("/dev/video1","/home/hy/project/picture/pict");
+	start("/dev/video3","/home/hy/project/picture/pict");
 //	START("/home/hy");
-	sleep(1);
+	sleep(6);
 	stop();
-	sleep(1);
+	sleep(2);
 	return 0;
 }
 

@@ -33,7 +33,7 @@ int start(char *devname,char *filename)
 }
 int stop(void)
 {
-	printf("pthread=%u\n",camera_pthread);
+	printf("pthread=%lu\n",camera_pthread);
 	if(pthread_kill(camera_pthread,SIGUSR1))
 	{
 		return -1;

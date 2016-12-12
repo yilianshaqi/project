@@ -23,10 +23,32 @@
 #include <unistd.h>
 #include<sys/mman.h>
 #include <signal.h>
+#include<errno.h>
 typedef struct BUFFER {
 	unsigned int length;
 	void *start;
 }BUF;
+typedef struct {
+	unsigned short bfType;
+	unsigned long  bfSize;
+	unsigned short bfReserved1;
+	unsigned short bfReserved2;
+	unsigned long bfoffbits;
+}BMPFILEHEAD;
+typedef struct {
+	unsigned long biSize;
+	unsigned long biWidth;
+	unsigned long biHeight;
+	unsigned short biPlanes;
+	unsigned short biBitCount;
+	unsigned long biCompression;
+	unsigned long biSizeImage;
+	unsigned long biXPelsPerMeter;
+	unsigned long biYPelsPerMeter;
+	unsigned long biClrUsed;
+	unsigned long biClrImportant;
+}BMPINFOHEAD;
+
 void log_exit(char *);//出错时打印错误信息并结束线程
 void open_device (char *devname);//打开设备文件
 int init_device(char *devname);//初始化设备
@@ -44,7 +66,9 @@ void stop_capture(void);//停止视频数据采集
 void close_device(void);//关闭视频设备
 void loop_handler(int signum);//sigalrm信号处理采集一张图片
 void stop_handler(int signum);//停止信号处理函数
-
+void add_bmphead(int);
+void input_rgb(unsigned char,unsigned char ,unsigned char);
+void yuyv2rgb(int);
 int fd;
 int picture_count ;
 FILE *camera_log_error;
@@ -52,6 +76,11 @@ int buf_count ;
 int condition;
 struct BUFFER *buf;
 char *filename ;
+//unsigned int datafirst;
+unsigned int gbpos;
+char *bufdata;
+unsigned int bufdata_length;
+
 #define RATE 50000
 #define IMAGE_WIDTH  640
 #define IMAGE_HEIGHT 480

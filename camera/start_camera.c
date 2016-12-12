@@ -29,13 +29,13 @@ void *start_camera(void *argv)
 	
 	fd = 0;
 //	struct BUFFER *buf=NULL;
-	picture_count =1;
-	buf_count = 20;
+	picture_count =0;
+	buf_count = 10;
 	condition = 1;
 	//停止信号处理监听
 	signal(SIGUSR1,stop_handler);
+//	sleep(6);
 	//初始化函数
-	printf("file:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
 	init_device(devname);
 
 	//申请缓存
@@ -60,7 +60,8 @@ void *start_camera(void *argv)
 }
 void log_exit(char *error)
 {
-	fprintf(camera_log_error,"%s error:\n",error);
+	fprintf(camera_log_error,"%s error:%s\n",error,strerror(errno));
+	close(fd);
 	pthread_exit(NULL);
 }
 void ckioctl(int fd,int macro,void *st)
@@ -118,7 +119,6 @@ void set_size(void )
 	format.fmt.pix.pixelformat=V4L2_PIX_FMT_YUYV;
 	format.fmt.pix.field=V4L2_FIELD_INTERLACED;
 	ckioctl(fd,VIDIOC_S_FMT,&format);
-	printf("file:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
 }
 //申请内存缓冲区
 void request_queue(void)
@@ -165,6 +165,12 @@ void init_mmap(void)
 		}
 
 	}
+	bufdata_length = 6 * buf[0].length/4;
+	bufdata = calloc(1,bufdata_length);
+	if(NULL==bufdata)
+	{
+		log_exit("calloc bufdata");
+	}
 }
 
 void add_queue(void)
@@ -193,6 +199,7 @@ void collect_data(void)
 	FD_ZERO(&set);
 	FD_SET(fd,&set);
 	int ret = select(fd+1,&set,NULL,NULL,NULL);
+	printf("file:%s,func:%s,line:%d\n",__FILE__,__func__,__LINE__);
 	if(ret <= 0)
 	{
 		log_exit("select");
@@ -205,7 +212,7 @@ void collect_data(void)
 
 	//保存文件名设置
 	char filepath[256]="";
-	sprintf(filepath,"%s%d",filename,picture_count);
+	sprintf(filepath,"%s%d.bmp",filename,picture_count%20);
 	printf("filepath:%s\n",filepath);
 	picture_count++;
 	//保存数据
@@ -215,11 +222,16 @@ void collect_data(void)
 	{
 		log_exit("open Storage file");
 	}
-	ret = write (fs,buf[getdata.index].start,buf[getdata.index].length);
+/*	ret = write (fs,buf[getdata.index].start,buf[getdata.index].length);
 	if(ret < 0)
 	{
 		log_exit("write storage file");
-	}
+	}  */
+	bzero(bufdata,bufdata_length);
+	gbpos =0;
+	add_bmphead(fs);
+	yuyv2rgb(getdata.index);
+	ret = write(fs,bufdata,bufdata_length);
 	close(fs);
 
 	//将缓冲区才添加回等待队列
@@ -243,7 +255,7 @@ void close_device(void)
 {
 	for(int i= 0;i<buf_count;i++)
 	{
-		munmap(buf[i].start,buf[i].length);
+//		munmap(buf[i].start,buf[i].length);
 	}
 	close(fd);
 }
@@ -258,8 +270,10 @@ void loop_handler(int signum)
 	}	
 	else
 	{
+		ualarm(1,0);
 		stop_capture();
 		close_device();
+		printf("camera pthread over\n");
 		pthread_exit(NULL);
 	}
 }
@@ -267,4 +281,109 @@ void stop_handler(int signum)
 {
 	printf("get stop signal\n");
 	condition = 0;
+}
+
+//写入bmp文件头
+void add_bmphead(int fs)
+{
+	//位图第一部分 文件信息
+	BMPFILEHEAD filehead;
+	bzero(&filehead,sizeof(filehead));
+	filehead.bfType = (unsigned short)0x4d42;//bm
+	filehead.bfSize = (unsigned long)(IMAGE_WIDTH * IMAGE_HEIGHT* 3 + 14 + 40); //文件字节数
+//	filehead.bfSize = IMAGE_WIDTH * IMAGE_HEIGHT* 3 + sizeof(BMPFILEHEAD) + sizeof(BMPINFOHEAD); //文件字节数
+	filehead.bfoffbits = 14+40;//bmp文件头的偏移量
+//	filehead.bfoffbits = sizeof(BMPFILEHEAD)+sizeof(BMPINFOHEAD);//bmp文件头的偏移量
+	//位图第二部分 数据属性
+	BMPINFOHEAD fileinfo;
+	bzero(&fileinfo,sizeof(fileinfo));
+//	fileinfo.biSize = sizeof(BMPINFOHEAD);
+	fileinfo.biSize = 40;
+	fileinfo.biWidth = IMAGE_WIDTH;
+	fileinfo.biHeight = IMAGE_HEIGHT;
+	fileinfo.biPlanes = 1;//为1，不用改
+	fileinfo.biBitCount = 24;//每个像素24bit
+	fileinfo.biCompression = 0;//不压缩
+	fileinfo.biSizeImage = IMAGE_WIDTH * IMAGE_HEIGHT *3;//像素字节数
+	fileinfo.biXPelsPerMeter = 5000;//2835;//像素每米
+//	fileinfo.biXPelsPerMeter = 2835;//2835;//像素每米
+//	fileinfo.biYPelsPerMeter = 2835;//2835;
+	fileinfo.biYPelsPerMeter = 5000;//2835;
+	fileinfo.biClrUsed = 0;//已用过的颜色，24的为0；
+	fileinfo.biClrImportant = 0;//每个像素都重要
+	//文件第三部分 色彩表 24bit不需要
+	//bmp头写入文件
+	
+	int ret =write(fs,&filehead,2);
+	if(ret <= 0)
+	{
+		log_exit("write file head 0");
+	}
+	 ret =write(fs,&filehead+2,12);
+	 if(ret <= 0 )
+	 {
+		 log_exit("write file head 1");
+	 }
+	ret = write(fs,&fileinfo,sizeof(fileinfo));
+	if(ret <= 0)
+	{
+		log_exit("write file head 2");
+	}
+	
+}
+//YUYV 2 BRG 写入文件
+void yuyv2rgb(int index)
+{
+	unsigned char  y0,u,y1,v;
+	for(int i= 0;i<buf[index].length;i=i+4)
+	{
+		y0 =*((char *)buf[index].start+i+0);
+		u  =*((char *)buf[index].start+i+1);
+		y1 =*((char *)buf[index].start+i+2);
+		v  =*((char *)buf[index].start+i+3);
+		input_rgb(y0,u,v);
+		input_rgb(y1,u,v);
+	}
+
+}
+
+//YUYV的y，u，v转rgb写入文件;
+void input_rgb(unsigned char y,unsigned char u,unsigned char v)
+{
+	int r,b,g;
+	char outbuf[3]="";
+	r = y + (1.370705 * (v-128));
+	g = y - (0.698001 * (v-128)) - (0.337633 * (u-128));
+	b = y + (1.732446 * (u-128));
+	if(r > 255) 
+	{
+		r = 255;
+	}
+	if(g > 255)
+	{
+		g = 255;
+	}
+	if(b > 255)
+	{
+		b = 255;
+	}
+	if(r < 0)
+	{
+		r = 0;
+	}
+	if(g < 0)
+	{
+		g =0;
+	}
+	if(b < 0)
+	{
+		b = 0;
+	}
+	outbuf[0] = r;
+	outbuf[1] = g;
+	outbuf[2] = b;
+	unsigned int position =0;
+	position = (IMAGE_HEIGHT - gbpos/(IMAGE_WIDTH*3))*IMAGE_WIDTH*3 + gbpos%(IMAGE_WIDTH*3);
+	bcopy(outbuf,bufdata+position,3);
+	gbpos +=3;
 }
